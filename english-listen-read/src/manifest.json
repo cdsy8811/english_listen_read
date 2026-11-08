@@ -1,0 +1,62 @@
+{
+    "name" : "英语听读",
+    "appid" : "__UNI__3DF6ECD",
+    "description" : "拍照把单词表变成词库，三种模式做听读练习（自用，方案 C 独立运行）",
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "versionName" : "1.0.0",
+    "versionCode" : "100",
+    "transformPx" : false,
+    "app-plus" : {
+        "usingComponents" : true,
+        "nvueStyleCompiler" : "uni-app",
+        "compilerVersion" : 3,
+        "splashscreen" : {
+            "alwaysShowBeforeRender" : true,
+            "waiting" : true,
+            "autoclose" : true,
+            "delay" : 0
+        },
+        "modules" : {
+            "Camera" : {},
+            "SQLite" : {},
+            "Record" : {}
+        },
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.self.elr",
+                "minSdkVersion" : 21,
+                "targetSdkVersion" : 35,
+                "abiFilters" : [ "armeabi-v7a", "arm64-v8a" ],
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>",
+                    "<uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\"/>",
+                    "<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>",
+                    "<uses-permission android:name=\"android.permission.VIBRATE\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\" android:maxSdkVersion=\"32\"/>",
+                    "<uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\" android:maxSdkVersion=\"28\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>"
+                ]
+            },
+            "ios" : {},
+            "sdkConfigs" : {}
+        },
+        "safeArea" : {
+            "background" : "#ffffff"
+        }
+    },
+    "vueVersion" : "3",
+    "h5" : {
+        "title" : "英语听读（开发预览）",
+        "router" : {
+            "mode" : "hash"
+        }
+    },
+    "mp-weixin" : {
+        "appid" : ""
+    }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "english-listen-read",
+  "version": "1.0.0",
+  "private": true,
+  "description": "英语听读软件（uni-app Vue3 + Vite + TypeScript / Android APK，方案 C 独立运行）",
+  "scripts": {
+    "dev:app": "uni -p app",
+    "dev:h5": "uni",
+    "build:app": "uni build -p app",
+    "build:h5": "uni build",
+    "typecheck": "vue-tsc --noEmit",
+    "prepare:env": "node scripts/sync-env.mjs",
+    "prepare:config": "node scripts/gen-runtime-config.mjs",
+    "verify:secrets": "node scripts/verify-no-secrets.mjs",
+    "verify:h5": "node scripts/verify-h5-clean.mjs",
+    "probe:ocr": "node --experimental-strip-types scripts/probe-recognize.ts",
+    "probe:tts": "node --experimental-strip-types scripts/probe-tts.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check:pack": "npm run prepare:env && npm run prepare:config && npm run verify:secrets && npm run typecheck && npm run build:app"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-app-plus": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5030620261106001",
+    "pinia": "2.2.2",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5030620261106001",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.7.3",
+    "vite": "5.2.8",
+    "vue-tsc": "^2.2.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

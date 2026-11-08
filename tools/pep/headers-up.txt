@@ -1,0 +1,20 @@
+HTTP/1.1 200 Connection Established
+
+HTTP/1.1 500 Internal Server Error
+Date: Sun, 08 Nov 2026 06:14:19 GMT
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 37
+Connection: keep-alive
+CDN-Cache-Control: no-store
+Report-To: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=4pZDaplVBXTUBsQzGJQjR13PQy0WALxpd4rL6wtcz5M%2FnPaNkuzJSjeXSF3svhj1Daz3DZ8SAbmAaoGp2O7UcQT7gK56IOx3JeMFIvgBTJ7DnsawmA8qUbArFAvOmB03wA%3D%3D"}]}
+Nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+Access-Control-Allow-Origin: *
+Cache-Control: no-store, max-age=0
+Access-Control-Allow-Headers: Range, Content-Type, Accept, Origin
+Access-Control-Allow-Methods: GET, HEAD, OPTIONS
+Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges, Content-Type, Content-Disposition
+Server: cloudflare
+cf-cache-status: BYPASS
+CF-RAY: a5726fcebdf150af-LAX
+alt-svc: h3=":443"; ma=86400
+

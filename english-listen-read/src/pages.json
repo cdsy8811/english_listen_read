@@ -1,0 +1,28 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "英语听读", "enablePullDownRefresh": true } },
+    { "path": "pages/settings/settings", "style": { "navigationBarTitleText": "设置" } },
+    { "path": "pages/capture/capture", "style": { "navigationBarTitleText": "拍照入库" } },
+    { "path": "pages/review/review", "style": { "navigationBarTitleText": "识别校对" } },
+    { "path": "pages/mode/mode", "style": { "navigationBarTitleText": "选择练习模式" } },
+    { "path": "pages/practice/practice", "style": { "navigationBarTitleText": "练习", "navigationBarBackgroundColor": "#ffffff" } },
+    { "path": "pages/result/result", "style": { "navigationBarTitleText": "本轮结果" } },
+    { "path": "pages/wrongbook/wrongbook", "style": { "navigationBarTitleText": "错词本" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "英语听读",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f6f7fb"
+  },
+  "tabBar": {
+    "color": "#7a8296",
+    "selectedColor": "#2f6fed",
+    "borderStyle": "white",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "词库" },
+      { "pagePath": "pages/settings/settings", "text": "设置" }
+    ]
+  }
+}

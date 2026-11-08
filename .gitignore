@@ -1,0 +1,58 @@
+# 密钥：故意排除，本地保留但不进版本库
+# 如需团队共享，改用密钥管理服务，不要取消下面这行
+docs/讯飞接口配置.md
+.env
+.env.local
+.env.*.local
+*.keystore
+*.jks
+
+# 构建期生成的分片配置：内含密钥派生片段，绝不进仓库
+english-listen-read/src/api/generated/
+english-listen-read/unpackage/
+english-listen-read/dist/
+
+# uni-app / HBuilderX（APK 内含密钥，产物绝不进仓库）
+unpackage/
+.hbuilderx/
+dist/
+*.apk
+*.ipa
+
+# Node
+node_modules/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Python 联调工具
+__pycache__/
+*.pyc
+tools/ocr_last.json
+
+# 教材原始数据与提取中间产物：版权归人民教育出版社，仅本机使用，不进仓库
+# （进仓库的只有 src/data/ 下提取后的词条数据）
+tools/pep/pages/
+tools/pep/md/
+tools/pep/extracted/
+tools/pep/edge-profile/
+tools/pep/*.png
+tools/pep/*.jpg
+tools/pep/*.html
+tools/pep/*.headers
+tools/pep/*.bin
+*.pdf
+
+# 第三方仓库副本（FreePEP）：不要把别人的仓库塞进自己仓库
+tools/FreePEP/
+
+# 教材抓取临时脚本（cdp 驱动、与本 App 无关）
+tools/pep/cdp-*.mjs
+
+# 本机工作记录 / AI 会话缓存
+.workbuddy/
+
+# 本机临时文件
+.DS_Store
+Thumbs.db
+~$*
