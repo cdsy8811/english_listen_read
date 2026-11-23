@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { onLaunch, onShow } from '@dcloudio/uni-app'
+import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { initDatabase } from '@/utils/db'
 import { useSettingsStore } from '@/store/settings'
 import { checkClockOffset } from '@/utils/clock'
 import { credentialsReady } from '@/api/runtime-config'
+import { playQueue } from '@/services'
+import { sweepOrphanAudio } from '@/services/tts-cache'
 
 onLaunch(async () => {
   // 本地库先行：断网时首页、词条、错词本、设置必须可用
   try {
     await initDatabase()
     await useSettingsStore().load()
+    // 启动阶段清一次音频缓存孤儿（写文件成功但没写成索引的 mp3），播放中不跑
+    void sweepOrphanAudio()
   } catch (e) {
     console.warn('[boot] 本地库初始化失败（仅记录类型，不输出内容）', (e as Error).name)
   }
@@ -24,40 +28,52 @@ onShow(() => {
   // 从后台切回时，若时间被手动调整过，重新检测一次
   void checkClockOffset()
 })
+
+/** App 切到后台（home 键 / 切应用）时立刻停播，避免声音留在后台继续响 */
+onHide(() => {
+  playQueue.stop()
+})
 </script>
 
 <style>
 page {
-  --elr-primary: #2f6fed;
-  --elr-bg: #f6f7fb;
+  --elr-primary: #f97316;
+  --elr-primary-dark: #c2410c;
+  --elr-bg: #fdf7f2;
   --elr-card: #ffffff;
-  --elr-text: #1f2430;
-  --elr-muted: #7a8296;
-  --elr-ok: #18a058;
-  --elr-warn: #e8912d;
-  --elr-err: #e0483c;
-  --elr-line: #e6e9f2;
+  --elr-text: #1b2130;
+  --elr-muted: #8a93a6;
+  --elr-ok: #22c55e;
+  --elr-warn: #f59e0b;
+  --elr-err: #ef4444;
+  --elr-line: #f4ece4;
   background: var(--elr-bg);
   color: var(--elr-text);
   font-size: 30rpx;
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 view, text, input, textarea, button { box-sizing: border-box; }
-.page { min-height: 100vh; padding: 24rpx; }
-.card { background: var(--elr-card); border-radius: 20rpx; padding: 28rpx; margin-bottom: 24rpx; box-shadow: 0 4rpx 20rpx rgba(31,36,48,.05); }
+.page { min-height: 100vh; padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom)); }
+.card { background: var(--elr-card); border-radius: 28rpx; padding: 30rpx; margin-bottom: 24rpx; box-shadow: 0 8rpx 30rpx rgba(27,33,48,.06); }
 .row { display: flex; align-items: center; justify-content: space-between; }
 .row-start { display: flex; align-items: center; gap: 16rpx; }
 .title { font-size: 34rpx; font-weight: 600; }
 .sub { font-size: 26rpx; color: var(--elr-muted); }
 .muted { color: var(--elr-muted); }
-.btn { background: var(--elr-primary); color: #fff; border-radius: 14rpx; padding: 20rpx 28rpx; font-size: 28rpx; line-height: 1.3; text-align: center; border: none; }
-.btn-ghost { background: #eef2ff; color: var(--elr-primary); }
+.section-head { display: flex; align-items: center; justify-content: space-between; margin: 12rpx 8rpx 20rpx; }
+.section-title { font-size: 32rpx; font-weight: 600; letter-spacing: .5rpx; }
+.section-more { font-size: 24rpx; color: var(--elr-muted); }
+.chevron { color: #c3c9d8; font-size: 36rpx; line-height: 1; }
+.btn { background: var(--elr-primary); color: #fff; border-radius: 999rpx; padding: 20rpx 32rpx; font-size: 28rpx; line-height: 1.3; text-align: center; border: none; }
+.btn::after { border: none; }
+.btn-ghost { background: #fff1e3; color: var(--elr-primary-dark); }
 .btn-plain { background: #fff; color: var(--elr-text); border: 1rpx solid var(--elr-line); }
 .btn-danger { background: #fdeceb; color: var(--elr-err); }
-.btn-sm { padding: 12rpx 20rpx; font-size: 24rpx; }
+.btn-sm { padding: 12rpx 22rpx; font-size: 24rpx; }
 .btn:active { opacity: .82; }
-.tag { font-size: 22rpx; color: var(--elr-primary); background: #eef2ff; border-radius: 8rpx; padding: 4rpx 12rpx; }
+.tag { font-size: 22rpx; color: var(--elr-primary-dark); background: #fff1e3; border-radius: 999rpx; padding: 4rpx 14rpx; }
 .divider { height: 1rpx; background: var(--elr-line); margin: 20rpx 0; }
+.pill { display: inline-flex; align-items: center; gap: 8rpx; font-size: 24rpx; color: var(--elr-primary-dark); background: #fff1e3; border-radius: 999rpx; padding: 8rpx 20rpx; }
 /* 输入框：uni-app H5 把 <input> 包成 uni-input 自定义元素，默认高度为 auto 且是 flex 容器，
    只给 padding 会让内部真实 input 被压到 ~2px（文字只露出一点）。这里显式给宿主高度并撑开内部节点。 */
 .input {
@@ -71,7 +87,7 @@ view, text, input, textarea, button { box-sizing: border-box; }
   font-size: 28rpx;
   line-height: 1.5;
   color: var(--elr-text);
-  background: #f4f6fb;
+  background: #faf5f0;
   border: 1rpx solid var(--elr-line);
   border-radius: 12rpx;
 }
@@ -122,7 +138,7 @@ body .uni-modal__textarea {
   font-size: 28rpx !important;
   line-height: 1.5 !important;
   color: var(--elr-text) !important;
-  background: #f4f6fb !important;
+  background: #faf5f0 !important;
   border: 1rpx solid var(--elr-line) !important;
   border-radius: 12rpx !important;
 }

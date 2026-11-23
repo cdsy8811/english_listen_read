@@ -1,28 +1,58 @@
 {
   "pages": [
-    { "path": "pages/index/index", "style": { "navigationBarTitleText": "英语听读", "enablePullDownRefresh": true } },
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "首页", "enablePullDownRefresh": true } },
+    { "path": "pages/library/library", "style": { "navigationBarTitleText": "词库", "enablePullDownRefresh": true } },
+    { "path": "pages/read/read", "style": { "navigationBarTitleText": "跟读", "enablePullDownRefresh": true } },
+    { "path": "pages/read/compose", "style": { "navigationBarTitleText": "手工添加短文" } },
+    { "path": "pages/dict/dict", "style": { "navigationBarTitleText": "电子词典" } },
+    { "path": "pages/mine/mine", "style": { "navigationBarTitleText": "我的" } },
+    { "path": "pages/records/records", "style": { "navigationBarTitleText": "学习记录" } },
+    { "path": "pages/about/about", "style": { "navigationBarTitleText": "关于" } },
     { "path": "pages/settings/settings", "style": { "navigationBarTitleText": "设置" } },
     { "path": "pages/capture/capture", "style": { "navigationBarTitleText": "拍照入库" } },
     { "path": "pages/review/review", "style": { "navigationBarTitleText": "识别校对" } },
     { "path": "pages/mode/mode", "style": { "navigationBarTitleText": "选择练习模式" } },
     { "path": "pages/practice/practice", "style": { "navigationBarTitleText": "练习", "navigationBarBackgroundColor": "#ffffff" } },
+    { "path": "pages/read/study", "style": { "navigationBarTitleText": "跟读练习", "navigationBarBackgroundColor": "#ffffff" } },
     { "path": "pages/result/result", "style": { "navigationBarTitleText": "本轮结果" } },
     { "path": "pages/wrongbook/wrongbook", "style": { "navigationBarTitleText": "错词本" } }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "英语听读",
+    "navigationBarTitleText": "橙子英语",
     "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f6f7fb"
+    "backgroundColor": "#fdf7f2"
   },
   "tabBar": {
-    "color": "#7a8296",
-    "selectedColor": "#2f6fed",
+    "color": "#8a93a6",
+    "selectedColor": "#f97316",
     "borderStyle": "white",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/index/index", "text": "词库" },
-      { "pagePath": "pages/settings/settings", "text": "设置" }
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png"
+      },
+      {
+        "pagePath": "pages/library/library",
+        "text": "词库",
+        "iconPath": "static/tabbar/library.png",
+        "selectedIconPath": "static/tabbar/library-active.png"
+      },
+      {
+        "pagePath": "pages/read/read",
+        "text": "跟读",
+        "iconPath": "static/tabbar/read.png",
+        "selectedIconPath": "static/tabbar/read-active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "static/tabbar/me.png",
+        "selectedIconPath": "static/tabbar/me-active.png"
+      }
     ]
   }
 }

@@ -50,7 +50,7 @@ test('OCR POST 签名与 Python auth_query 完全等价（固定 date）', () =>
 test('WSS GET 签名与 Python auth_query 完全等价（听写 / 合成两个端点）', () => {
   const date = 'Fri, 06 Nov 2026 13:27:18 GMT'
   for (const [host, p] of [
-    ['iat.cn-huabei-1.xf-yun.com', '/v1'],
+    ['iat-api.xfyun.cn', '/v2/iat'],
     ['cbm01.cn-huabei-1.xf-yun.com', '/v1/private/mcd9m97e6'],
   ]) {
     const o = { path: p, method: 'GET' as const, signHost: host, ...FAKE, date }
@@ -71,15 +71,15 @@ test('OCR 签名 host 可用 XFYUN_OCR_SIGN_HOST 覆盖，且请求域名不变'
 
 test('签名 URL 的 authorization 解码后结构正确，且 WSS 请求行是 GET、OCR 是 POST', () => {
   const date = 'Thu, 17 Sep 2026 01:38:38 GMT'
-  const q = buildAuthQuery({ path: '/v1', method: 'GET', signHost: 'iat.cn-huabei-1.xf-yun.com', ...FAKE, date })
+  const q = buildAuthQuery({ path: '/v2/iat', method: 'GET', signHost: 'iat-api.xfyun.cn', ...FAKE, date })
   const auth = decodeURIComponent(new URLSearchParams(q).get('authorization') || '')
   const decoded = utf8Decode(base64Decode(auth))
   assert.match(decoded, /^api_key="fake_key_0123456789abcdef", algorithm="hmac-sha256", headers="host date request-line", signature="[A-Za-z0-9+/=]+"$/)
 })
 
 test('splitEndpoint 解析 https / wss 端点', () => {
-  assert.deepEqual(splitEndpoint('wss://iat.cn-huabei-1.xf-yun.com/v1'),
-    { scheme: 'wss', host: 'iat.cn-huabei-1.xf-yun.com', path: '/v1' })
+  assert.deepEqual(splitEndpoint('wss://iat-api.xfyun.cn/v2/iat'),
+    { scheme: 'wss', host: 'iat-api.xfyun.cn', path: '/v2/iat' })
   assert.deepEqual(splitEndpoint('https://cbm01.cn-huabei-1.xf-yun.com/v1/private/se75ocrbm'),
     { scheme: 'https', host: 'cbm01.cn-huabei-1.xf-yun.com', path: '/v1/private/se75ocrbm' })
   assert.throws(() => splitEndpoint('not-a-url'))

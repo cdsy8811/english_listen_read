@@ -4,19 +4,29 @@
  *  - speed 默认 50 而非 1.0：0.5×–2.0× 需做倍数标定
  *  - 音频分帧返回且顺序不保证，必须按 seq 重排序后再拼接
  *  - 输出 lame(mp3)/16k 可直接给 uni.createInnerAudioContext()
- *  - 英文发音人授权未验证：失败时由 player 降级安卓原生 TTS
+ *  - 英文发音人 `x5_EnUs_Lila_flow`（美式女声）2026-11-21 实测 code=0 可用；
+ *    其余英文 vcn 仍 11200 未授权，云调用失败 / 无网时由 player 降级安卓原生 TTS
+ *  - 讯飞只授权了美式英文音色：请求 UK 口音时直接交给原生 / 浏览器 TTS，不拿美音冒充
  */
 import { openWs, signedWsUrl } from './http.ts'
 import { ENDPOINTS, appId, devProxyAvailable } from './runtime-config.ts'
 import { base64Decode, utf8ToBase64 } from '../utils/crypto.ts'
-import { CloudError, logger } from '../utils/log.ts'
-import { textHash, saveAudioBytes, audioFilePath } from '../utils/audio-file.ts'
+import { CloudError, kb, logger } from '../utils/log.ts'
+import { cacheKey, lookupAudio, storeAudio } from '../services/tts-cache.ts'
 import { toBlob } from '../utils/plus-io.ts'
-import { getCachedAudio, putCachedAudio } from '../services/storage.ts'
 import { dedupe, withRetry } from '../utils/retry.ts'
 import { nativeSpeak, nativeAvailable, interruptNative } from './native-tts.ts'
 
-export interface SpeakOptions { lang: 'zh' | 'en'; speed: number; volume: number }
+export interface SpeakOptions {
+  lang: 'zh' | 'en'
+  speed: number
+  volume: number
+  /**
+   * 口音：讯飞英文只有美式发音人，「UK 英音」请求改走原生 / 浏览器 TTS（en-GB）；
+   * 云调用失败降级时同样用这个值。
+   */
+  accent?: 'US' | 'UK'
+}
 
 interface TtsFrame {
   header?: { code?: number; message?: string; sid?: string }
@@ -29,8 +39,13 @@ export function speedToXf(multiplier: number): number {
   return Math.round(clamped * 50)
 }
 
-export function volumeToXf(percent: number): number {
-  return Math.round(Math.min(100, Math.max(0, percent)))
+/**
+ * 是否跳过云端合成、直接走原生 / 浏览器 TTS。
+ * 讯飞英文只授权了美式音色（`x5_EnUs_Lila_flow`），选 UK 英音时不拿美音冒充。
+ * 纯函数，可离线自测。
+ */
+export function preferNativeVoice(opts: Pick<SpeakOptions, 'lang' | 'accent'>): boolean {
+  return opts.lang === 'en' && opts.accent === 'UK'
 }
 
 /**
@@ -48,13 +63,16 @@ export function mergeFrames(frames: Array<{ seq: number; audio: string }>): Uint
   return out
 }
 
-/** 一次合成：返回可直接播放的本地文件路径（带缓存）。 */
+/** 一次合成：返回可直接播放的本地文件路径（先查本地缓存，未命中才计费）。 */
 async function synthOnce(text: string, opts: SpeakOptions): Promise<string> {
   const vcn = opts.lang === 'en' ? ENDPOINTS.vcnEn : ENDPOINTS.vcnZh
   const speed = speedToXf(opts.speed)
-  const hash = textHash(`${text}:${opts.lang}:${vcn}:${speed}`)
-  const cached = await getCachedAudio(hash, opts.lang, vcn, speed)
+  const meta = { text, lang: opts.lang, vcn, speed }
+  const hash = cacheKey(meta)
+  const t0 = Date.now()
+  const cached = await lookupAudio(meta)
   if (cached) return cached
+  logger.debug('tts.req', { lang: opts.lang, vcn, hash, chars: text.length, speed, volume: opts.volume })
 
   const frames: Array<{ seq: number; audio: string }> = []
   return new Promise<string>((resolve, reject) => {
@@ -67,6 +85,7 @@ async function synthOnce(text: string, opts: SpeakOptions): Promise<string> {
         try { frame = JSON.parse(String(raw)) as TtsFrame } catch (_) { return }
         const code = frame.header?.code
         if (code !== undefined && code !== 0) {
+          logger.warn('tts.fail', { code, lang: opts.lang, sid: frame.header?.sid, ms: Date.now() - t0 })
           finish(() => {
             session?.close()
             reject(new CloudError(`合成失败（code=${code}）：${frame.header?.message || '发音人可能未授权'}`, code, frame.header?.sid))
@@ -82,9 +101,8 @@ async function synthOnce(text: string, opts: SpeakOptions): Promise<string> {
             session?.close()
             if (!frames.length) { reject(new CloudError('合成未返回音频', -1)); return }
             const merged = mergeFrames(frames)
-            saveAudioBytes(merged, hash)
-              .then((path) => putCachedAudio(hash, opts.lang, vcn, speed, audioFilePath(hash)).then(() => resolve(path)))
-              .catch(reject)
+            logger.debug('tts.ok', { lang: opts.lang, frames: frames.length, kb: kb(merged.length), ms: Date.now() - t0 })
+            storeAudio(meta, merged).then(resolve).catch(reject)
           })
         }
       },
@@ -93,13 +111,14 @@ async function synthOnce(text: string, opts: SpeakOptions): Promise<string> {
     }, 90000)
 
     // 一次性发送：header.status=2，payload.text.status=2
+    // 音量固定 100：音量在播放侧施加，云端只合成一份，所有音量共用缓存
     const body = {
       header: { app_id: appId(), status: 2 },
       parameter: {
         tts: {
           vcn,
           speed,
-          volume: volumeToXf(opts.volume),
+          volume: 100,
           pitch: 50,
           audio: { encoding: 'lame', sample_rate: 16000, channels: 1, bit_depth: 16 },
         },
@@ -122,7 +141,12 @@ const h5AudioCache = new Map<string, string>()
 async function synthViaDevProxy(text: string, opts: SpeakOptions): Promise<string> {
   const key = `${text}:${opts.lang}:${opts.speed}:${opts.volume}`
   const hit = h5AudioCache.get(key)
-  if (hit) return hit
+  if (hit) {
+    logger.debug('tts.cache.hit', { lang: opts.lang, via: 'h5' })
+    return hit
+  }
+  const t0 = Date.now()
+  logger.debug('tts.req', { lang: opts.lang, chars: text.length, speed: opts.speed, via: 'h5' })
   const res = await fetch('/__dev/xfyun/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -142,6 +166,7 @@ async function synthViaDevProxy(text: string, opts: SpeakOptions): Promise<strin
     h5AudioCache.clear()
   }
   h5AudioCache.set(key, url)
+  logger.debug('tts.ok', { lang: opts.lang, via: 'h5', ms: Date.now() - t0 })
   return url
 }
 
@@ -158,10 +183,15 @@ export function resetVoiceCache(): void {
 
 /**
  * 能力层 speak：文本 → 本地音频路径。
- * 英文合成失败（音色未授权等）→ 降级安卓原生 TTS；此时返回空路径由 player 走原生播放。
+ * 中文 / 英文（美音）走讯飞超拟人；UK 英音、音色未授权、无网时返回空路径，
+ * 由 player 降级安卓原生 TTS 播放。
  */
 export async function synthesize(text: string, opts: SpeakOptions): Promise<string> {
   if (!text.trim()) return ''
+  if (preferNativeVoice(opts)) {
+    logger.debug('tts.accent.native', { lang: opts.lang, accent: opts.accent })
+    return ''
+  }
   if (langUnavailable.has(opts.lang)) return ''
   // #ifndef APP-PLUS
   // 浏览器预览没有凭据、也不做客户端签名：
@@ -184,7 +214,8 @@ export async function synthesize(text: string, opts: SpeakOptions): Promise<stri
   return ''
   // #endif
   // #ifdef APP-PLUS
-  const key = `tts:${text}:${opts.lang}:${speedToXf(opts.speed)}:${opts.volume}`
+  // 同一段文本 / 语速并发只合成一次（音量不进键，音量在播放侧施加）
+  const key = cacheKey({ text, lang: opts.lang, vcn: opts.lang === 'en' ? ENDPOINTS.vcnEn : ENDPOINTS.vcnZh, speed: speedToXf(opts.speed) })
   try {
     return await dedupe(key, () => withRetry(() => synthOnce(text, opts), { retries: 1 }))
   } catch (e) {

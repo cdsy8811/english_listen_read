@@ -8,11 +8,13 @@
  * 本文件的清洗逻辑是纯函数，可离线自测；云调用走能力层注入。
  */
 import type { ChatMessage } from '../api/xfyun-maas.ts'
+import { logger } from '../utils/log.ts'
 import type { WordDraft } from './types.ts'
 
 export const EXTRACT_SYSTEM = '你是英语单词表整理助手。只输出严格 JSON，不要解释、不要代码块。'
 
 export function buildExtractPrompt(markdown: string): string {
+  logger.debug('extract.prompt', { markdownChars: markdown.length, usedChars: Math.min(4000, markdown.length) })
   return [
     '下面是从单词表图片 OCR 出来的 markdown 文本。请抽取每个词条，只输出 JSON，不要解释、不要代码块。',
     '格式：{"items":[{"word":"","phonetic":"","pos":"","translation":""}]}',
@@ -95,7 +97,101 @@ export function normalizeDrafts(items: unknown[]): WordDraft[] {
 
 export function parseExtraction(raw: string): WordDraft[] {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
-  const obj = JSON.parse(cleaned) as { items?: unknown[] }
-  if (!Array.isArray(obj.items)) throw new Error('抽取结果缺少 items 数组')
-  return normalizeDrafts(obj.items)
+  let obj: { items?: unknown[] }
+  try {
+    obj = JSON.parse(cleaned) as { items?: unknown[] }
+  } catch (e) {
+    logger.error('extract.json.fail', { chars: raw.length, msg: (e as Error).message })
+    throw e
+  }
+  if (!Array.isArray(obj.items)) {
+    logger.error('extract.items.missing', { keys: Object.keys(obj).slice(0, 5) })
+    throw new Error('抽取结果缺少 items 数组')
+  }
+  const drafts = normalizeDrafts(obj.items)
+  logger.debug('extract.parse', { raw: obj.items.length, kept: drafts.length })
+  return drafts
+}
+
+/* ---------------- 文本导入：按单元切段 ---------------- */
+/**
+ * 整本书的单词文本长度远超一次模型请求的可用上下文，也不能靠模型自己「分单元」，
+ * 所以先在本地按 Unit 标题切段（纯函数、可离线自测），再逐段交给 X2.6 抽取。
+ */
+export interface UnitSection {
+  /** 单元标题（来自标题行），没有标题时为空串，由上层补默认名 */
+  title: string
+  /** 该单元对应的原始文本（已去掉标题行） */
+  text: string
+}
+
+/** 单段最大字符数：略低于 prompt 的 4000 字截断线，避免内容被静默丢掉 */
+export const MAX_SECTION_CHARS = 3500
+
+const UNIT_HEADING = /^(?:(?:starter\s*)?unit\s*\d+|module\s*\d+|第\s*[一二三四五六七八九十百零两\d]+\s*单元|[七八九]\s*[上下]\s*(?:starter\s*)?unit\s*\d+)/i
+
+/** 去掉 markdown 记号与序号，只留标题文字。 */
+export function cleanUnitTitle(line: string): string {
+  return String(line)
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/[*_`>]/g, '')
+    .replace(/^\s*[-\d]+[.、)]\s*/, '')
+    .replace(/\s*[:：]\s*$/, '')
+    .trim()
+    .slice(0, 40)
+}
+
+/** 是否单元标题行：短、且形如 Unit 3 / Starter Unit 2 / 第 3 单元 / 七上 Unit 1。 */
+export function isUnitHeading(line: string): boolean {
+  const s = cleanUnitTitle(line)
+  if (!s || s.length > 40) return false
+  return UNIT_HEADING.test(s)
+}
+
+function splitByLines(lines: string[], maxChars: number): string[][] {
+  const out: string[][] = []
+  let cur: string[] = []
+  let size = 0
+  for (const line of lines) {
+    const add = line.length + 1
+    if (cur.length && size + add > maxChars) {
+      out.push(cur)
+      cur = []
+      size = 0
+    }
+    cur.push(line)
+    size += add
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+
+/**
+ * 文本 → 按 Unit 切好的段落。没有标题时整体作为一段；单段过长时再按行切成多段，
+ * 多段共用同一个标题（上层按标题复用单元，于是仍然写进同一个单元）。
+ */
+export function splitUnitSections(raw: string, maxChars = MAX_SECTION_CHARS): UnitSection[] {
+  const lines = String(raw).replace(/\r\n?/g, '\n').split('\n')
+  const groups: Array<{ title: string; lines: string[] }> = []
+  let cur = { title: '', lines: [] as string[] }
+
+  for (const line of lines) {
+    if (isUnitHeading(line)) {
+      if (cur.lines.some((l) => l.trim())) groups.push(cur)
+      cur = { title: cleanUnitTitle(line), lines: [] }
+      continue
+    }
+    cur.lines.push(line)
+  }
+  if (cur.lines.some((l) => l.trim())) groups.push(cur)
+
+  const out: UnitSection[] = []
+  for (const g of groups) {
+    for (const chunk of splitByLines(g.lines, maxChars)) {
+      const text = chunk.join('\n').trim()
+      if (text) out.push({ title: g.title, text })
+    }
+  }
+  logger.debug('text.split', { chars: String(raw).length, sections: out.length })
+  return out
 }

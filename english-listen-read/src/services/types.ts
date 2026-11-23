@@ -50,6 +50,70 @@ export interface PracticeRecord {
   created_at: number
 }
 
+/** 跟读文章：拍照识别出的英文短文，按句保存。 */
+export interface ReadArticle {
+  id: string
+  title: string
+  source_img: string
+  /** 句子数组（存储层序列化为 JSON，上层只看到数组） */
+  sentences: string[]
+  /** 逐句中文译文，与 sentences 等长；没有译文时为空字符串。手工添加时由粘贴内容解析 */
+  translations: string[]
+  created_at: number
+}
+
+export interface ReadRecord {
+  id: string
+  article_id: string
+  sentence_index: number
+  asr_text: string
+  score: number
+  detail_json: string
+  created_at: number
+}
+
+/** 学习记录：一次练习（2.1/2.2/2.3/默写）或一次跟读算一条，只记概况，明细仍在 practice_record / read_record。 */
+export interface StudySession {
+  id: string
+  /** practice = 词条练习；read = 短文跟读 */
+  kind: 'practice' | 'read'
+  /** 练习模式 2.1 / 2.2 / 2.3；默写记 dictation；跟读记 read */
+  mode: string
+  unit_id: string
+  /** 单元名称（多单元用 · 连接）/ 短文标题 */
+  title: string
+  started_at: number
+  ended_at: number
+  duration_sec: number
+  /** 计划条数：词数 / 句子数 */
+  total: number
+  /** 本次实际作答次数（含「取消」跳过；跟读为录音检查的句子数） */
+  answered: number
+  /** 内容正确度达标（≥ 60 分）的次数 */
+  passed: number
+  /** 已作答题目的平均分 */
+  avg_score: number
+  created_at: number
+}
+
+/** 跟读句子评分：只表示内容正确度，不含任何发音维度。 */
+export interface PassageEval {
+  score: number
+  expected: string
+  answer: string
+  asrText: string
+  /** 逐词标记，text 与原文显示用词一一对应 */
+  words: Array<{ text: string; status: 'ok' | 'near' | 'missed' }>
+  /** 转写里多出来的词 */
+  extra: string[]
+  /** 读对的词数（近似读对按 0.85 计）与原文词数 */
+  hit: number
+  total: number
+  feedback: string
+  /** 是否走了云端语义判分（离线时 false） */
+  semantic: boolean
+}
+
 export interface Settings {
   /** 全局朗读速度 0.5–2.0 */
   speed: number
@@ -62,8 +126,8 @@ export interface Settings {
   repeatTimes: number
   /** 2.1 条目间隔 0–10 秒 */
   itemGapSec: number
-  /** 2.2 / 2.3 作答方式 */
-  answerType: AnswerType
+  /** 2.2 / 2.3 是否随机顺序加载词条（开关在「选择练习模式」页） */
+  randomOrder: boolean
   /** 2.2 / 2.3 推进模式 */
   advanceMode: AdvanceMode
   /** 定时推进等待秒数 1–15 */
@@ -79,10 +143,11 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: 'US',
   volume: 80,
   autoPlay: true,
-  playOrder: 'en-zh',
+  /** 2.1 播放顺序：默认只读英文；要中英共读在设置页切「英 → 中 / 中 → 英」 */
+  playOrder: 'en-only',
   repeatTimes: 1,
   itemGapSec: 1.5,
-  answerType: 'record',
+  randomOrder: false,
   advanceMode: 'submit',
   waitSec: 3,
   strictness: 'normal',

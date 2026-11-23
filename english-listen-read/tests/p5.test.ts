@@ -13,8 +13,8 @@ import { createAdvanceController } from '../src/services/advance.ts'
 import { StateMachine, canTransition } from '../src/services/progress.ts'
 import { localEvaluate, meaningCoverage, normalizeEn } from '../src/services/evaluator.ts'
 import { buildReadSegments, buildPromptSegment } from '../src/services/player.ts'
-import { speedToXf, mergeFrames } from '../src/api/xfyun-tts.ts'
-import { buildIatFrames, decodeIatText } from '../src/api/xfyun-iat.ts'
+import { speedToXf, mergeFrames, preferNativeVoice } from '../src/api/xfyun-tts.ts'
+import { buildIatFrames, resultText } from '../src/api/xfyun-iat.ts'
 import { DEFAULT_SETTINGS, type Word } from '../src/services/types.ts'
 
 const SRC = path.resolve(import.meta.dirname, '../src')
@@ -155,6 +155,7 @@ test('导出 → 导入 round-trip；导出 JSON 不含任何凭据', async () =
   const bundle = parseLibraryJson(out.json)
   assert.equal(bundle.version, 1)
   assert.equal(bundle.words[0].word, 'abandon')
+  assert.equal(parseLibraryJson('\uFEFF' + out.json).units.length, 1)   // 文件选择 / Windows 编辑器可能带 BOM
 
   freshDb()                                              // 模拟换设备 / 清数据
   await initDatabase()
@@ -178,6 +179,47 @@ test('2.2 英文文本比对：正确 100、近似给部分分、无关 0', () =
   assert.equal(localEvaluate(evalInput('camera')).score, 0)
   assert.equal(localEvaluate(evalInput('')).score, 0)
   assert.equal(normalizeEn('Abandon, please!'), 'abandon please')
+})
+
+/* 2026-11-15 实测：听写把 "two" 写成 "To."；en_us 的 nbest/wbest 只回一个候选。
+   这类同音歧义不是用户读错，2.2 只评内容正确度，必须按正确计，否则是假阴性。 */
+function homophoneInput(w: Word, answer: string, strictness: 'loose' | 'normal' | 'strict' = 'normal') {
+  return { mode: '2.2' as const, word: w, answer, asrText: answer, inputType: 'record' as const, strictness }
+}
+const wordOf = (w: string): Word => ({ ...word, word: w, translation: '放弃；抛弃' })
+
+test('2.2 同音词 / 拆词转写按正确计，近音不同词仍然算错', () => {
+  const two = localEvaluate(homophoneInput(wordOf('two'), 'To.'))
+  assert.equal(two.score, 100)
+  assert.match(two.feedback, /同音/)
+  assert.ok(two.highlights.every((h) => h.ok))
+
+  assert.equal(localEvaluate(homophoneInput(wordOf('read'), 'red')).score, 100)
+  assert.equal(localEvaluate(homophoneInput(wordOf('right'), 'write')).score, 100)
+  assert.equal(localEvaluate(homophoneInput(wordOf('weather'), 'whether')).score, 100)
+  assert.equal(localEvaluate(homophoneInput(wordOf('two'), '2')).score, 100)   // 听写常见数字写法
+
+  // 听写把单词拆开 / 粘连：只差词间空格
+  const split = localEvaluate(homophoneInput(wordOf('abandon'), 'a band on'))
+  assert.equal(split.score, 100)
+  assert.equal(split.highlights[0].ok, true)
+
+  // 近音但不同的词不能放过，否则会把读错掩盖成同音
+  assert.ok(localEvaluate(homophoneInput(wordOf('ship'), 'sheep')).score < 100)
+  assert.ok(localEvaluate(homophoneInput(wordOf('cat'), 'cut')).score < 100)
+  assert.equal(localEvaluate(homophoneInput(wordOf('abandon'), 'camera')).score, 0)
+
+  assert.equal(normalizeEn('2 apples'), 'two apples')
+  // 完全一致时不该出现「只差词间空格 / 同音」这类说明
+  const exact = localEvaluate(evalInput('abandon'))
+  assert.equal(exact.score, 100)
+  assert.doesNotMatch(exact.feedback, /空格|同音/)
+  // 输入框作答的说明用「作答」，不能叫「转写」
+  const typedHomo = localEvaluate({ ...homophoneInput(wordOf('two'), 'to'), inputType: 'input' })
+  assert.match(typedHomo.feedback, /作答/)
+  assert.doesNotMatch(typedHomo.feedback, /转写/)
+  // 中文释义仍走义项覆盖，不被英文同音逻辑影响（只答出一个义项 = 50 分）
+  assert.equal(localEvaluate(evalInput('放弃', '2.3')).score, 50)
 })
 
 test('2.3 中文释义：全义和同义都算对，无关给 0', () => {
@@ -226,31 +268,48 @@ test('TTS：speed 以 50 为 1.0× 基准；音频帧按 seq 重排', () => {
   assert.equal(Buffer.from(padded).toString('utf8'), 'AB')
 })
 
-test('听写：分帧首帧带参数、末帧 status=2；单帧也标记结束', () => {
+test('TTS：英文美音走讯飞，UK 英音走原生（讯飞只授权美式音色）', () => {
+  assert.equal(preferNativeVoice({ lang: 'en', accent: 'US' }), false)
+  assert.equal(preferNativeVoice({ lang: 'en', accent: undefined }), false)
+  assert.equal(preferNativeVoice({ lang: 'en', accent: 'UK' }), true)
+  // 中文与口音无关
+  assert.equal(preferNativeVoice({ lang: 'zh', accent: 'UK' }), false)
+})
+
+test('听写：首帧带 common/business、末帧 status=2，响应按 ws[].cw[].w 拼文本', () => {
   const frames = buildIatFrames('A'.repeat(3000), 'en') as Array<{
-    header: { status: number }
-    parameter?: unknown
-    payload: { audio: { status: number; seq: number; audio: string; encoding: string; sample_rate: number } }
+    common?: { app_id: string }
+    business?: { language: string; domain: string; accent?: string }
+    data: { status: number; audio: string; format: string; encoding: string }
   }>
   assert.equal(frames.length, 3)
-  assert.ok(frames[0].parameter)
-  assert.equal(frames[0].payload.audio.status, 0)
-  assert.equal(frames[1].header.status, 1)
-  assert.equal(frames[2].header.status, 2)
-  assert.equal(frames[2].payload.audio.status, 2)
-  assert.equal(frames[2].payload.audio.encoding, 'lame')
-  assert.equal(frames[2].payload.audio.sample_rate, 16000)
-  const single = buildIatFrames('AAA', 'zh') as Array<{ header: { status: number } }>
-  assert.equal(single.length, 1)
-  assert.equal(single[0].header.status, 2)
-  const b64 = Buffer.from(JSON.stringify({
-    ws: [{ cw: [{ w: 'hello' }] }, { cw: [{ w: ' world' }] }],
-  })).toString('base64')
-  assert.equal(decodeIatText(b64), 'hello world')
-  assert.equal(decodeIatText(''), '')
+  assert.ok(frames[0].common)
+  assert.equal(frames[0].business?.language, 'en_us')
+  assert.equal(frames[0].business?.domain, 'iat')
+  // format / encoding 只放在 data 帧里；business 传这两个字段会被 10163 拒掉
+  assert.equal((frames[0].business as Record<string, unknown>).format, undefined)
+  assert.equal(frames[0].data.format, 'audio/mpeg')
+  assert.equal(frames[0].data.encoding, 'lame')
+  // 英文不传 accent（只有中文听写用 mandarin）
+  assert.equal(frames[0].business?.accent, undefined)
+  assert.equal(frames[0].data.status, 0)
+  assert.equal(frames[1].data.status, 1)
+  assert.equal(frames[2].data.status, 2)
+  assert.equal(frames[2].data.audio, '')
+  assert.equal(frames[1].common, undefined)
+
+  const zh = buildIatFrames('AAA', 'zh') as Array<{ business?: { accent?: string; language: string } }>
+  assert.equal(zh[0].business?.language, 'zh_cn')
+  assert.equal(zh[0].business?.accent, 'mandarin')
+
+  assert.equal(resultText({ ws: [{ cw: [{ w: 'hello' }] }, { cw: [{ w: ' world' }] }] }), 'hello world')
+  assert.equal(resultText(undefined), '')
 })
 
 test('2.1 播放片段：播放顺序 / 重复次数 / 提示语种', () => {
+  // 默认只读英文（2026-11-15 用户要求：学习时不需要读中文）
+  assert.equal(DEFAULT_SETTINGS.playOrder, 'en-only')
+  assert.deepEqual(buildReadSegments(word, DEFAULT_SETTINGS).map((x) => x.lang), ['en'])
   const s = buildReadSegments(word, { playOrder: 'en-zh', repeatTimes: 2 })
   assert.equal(s.length, 4)
   assert.deepEqual(s.map((x) => x.lang), ['en', 'zh', 'en', 'zh'])

@@ -81,7 +81,8 @@ function synth(vcn: string, text: string): Promise<Attempt> {
 }
 
 const ZH_CANDIDATES = ['x5_lingxiaoxuan_flow', 'x4_lingxiaoxuan_oral', 'x5_lingxiaoyue_flow', 'x5_lingyuyan_flow', 'x6_lingxiaoyue_pro', 'x4_ziyang_oral', 'x5_lingfeiyi_flow']
-const EN_CANDIDATES = ['x5_EnUs_Grant_flow', 'x5_EnUs_Lila_flow', 'x4_EnUs_Lila_emo', 'x6_ap_pro_EN', 'x6_xinyun_pro_EN', 'x7_ap_en_pro', 'x4_EnUs_Grant_emo']
+// 2026-11-21 实测：Lila 可用（code=0），Grant / x6_ap_pro_EN / x7_ap_en_pro 等仍 11200
+const EN_CANDIDATES = ['x5_EnUs_Lila_flow', 'x5_EnUs_Grant_flow', 'x4_EnUs_Lila_emo', 'x6_ap_pro_EN', 'x6_xinyun_pro_EN', 'x7_ap_en_pro', 'x4_EnUs_Grant_emo']
 
 async function main() {
   const args = process.argv.slice(2)

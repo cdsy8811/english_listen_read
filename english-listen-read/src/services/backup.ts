@@ -2,7 +2,7 @@
  * 本地词库备份文件（纯本地单机）：导出到 App 私有目录 _doc/backups/，导入从同目录读回。
  * 不联网、不登录、不依赖任何服务；H5 端降级为剪贴板 / 粘贴文本。
  */
-import { ioAvailable, listFiles, readText, writeBlob } from '../utils/plus-io.ts'
+import { ioAvailable, listFiles, readText, writeText } from '../utils/plus-io.ts'
 
 const DIR = 'backups'
 
@@ -20,7 +20,7 @@ export function fileBackupAvailable(): boolean { return ioAvailable() }
 /** 写出备份文件，返回本地 file URL；不支持文件系统的平台返回空串（上层走剪贴板）。 */
 export async function writeBackup(json: string): Promise<string> {
   if (!ioAvailable()) return ''
-  return writeBlob(`${DIR}/elr-${stamp()}.json`, new Blob([json], { type: 'application/json' }), DIR)
+  return writeText(`elr-${stamp()}.json`, json, DIR)
 }
 
 /** 列出已导出的备份（按文件名倒序，即最新在前）。 */

@@ -77,10 +77,19 @@ export async function recognizeRaw(imageBase64: string, encoding = 'jpg'): Promi
         payload: { image: { encoding, image: imageBase64, status: 0, seq: 0 } },
       }
       // 日志只打路径，不打完整鉴权 URL / app_id / 图片 base64
-      logger.info('ocr.request', { path: ENDPOINTS.ocrUrl.split('?')[0], sizeKB: Math.round(imageBase64.length / 1024) })
+      const t0 = Date.now()
+      logger.info('ocr.request', {
+        path: ENDPOINTS.ocrUrl.split('?')[0], sizeKB: Math.round(imageBase64.length / 1024), encoding,
+      })
       const res = await httpJson<OcrRawResponse>({ url, method: 'POST', data: body, timeout: 30000, retry: false, route: 'ocr' })
-      const out = decodeOcrResult(res)
-      logger.info('ocr.ok', { note: out.note, chars: out.markdown.length, sid: out.sid })
+      let out: ReturnType<typeof decodeOcrResult>
+      try {
+        out = decodeOcrResult(res)
+      } catch (e) {
+        logger.error('ocr.fail', { code: (e as CloudError).code, sid: (e as CloudError).sid, ms: Date.now() - t0 })
+        throw e
+      }
+      logger.info('ocr.ok', { note: out.note, chars: out.markdown.length, sid: out.sid, ms: Date.now() - t0 })
       return out.markdown
     }
     return withRetry(run, { retries: 2 })

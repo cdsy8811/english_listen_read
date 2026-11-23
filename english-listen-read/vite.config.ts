@@ -246,7 +246,9 @@ function devCloudProxyPlugin(): Plugin {
 
 // UNI_PLATFORM 由 uni CLI 注入；npm script 名带 h5 时再兜一层，避免漏判
 const h5Hint = /h5/i.test(process.env.npm_lifecycle_event || '')
-const isAppBuild = (process.env.UNI_PLATFORM || (h5Hint ? 'h5' : 'app')) === 'app'
+const currentPlatform = process.env.UNI_PLATFORM || (h5Hint ? 'h5' : 'app')
+// app-harmony 与 app 同属 App 端：都要保留构建期注入的凭据分片，不能当 H5 清空
+const isAppBuild = currentPlatform !== 'h5' && currentPlatform !== 'web'
 
 export default defineConfig({
   plugins: [
@@ -254,6 +256,9 @@ export default defineConfig({
     ...(isAppBuild ? [] : [h5CredentialGuardPlugin(), devCloudProxyPlugin()]),
     uni(),
   ],
+  server: {
+    port: 5153,
+  },
   // 本地工程目录；envPrefix 不匹配任何 XFYUN_*，Vite 不会把 .env.local 内联进产物
   envDir: __dirname,
   // 不使用 VITE_ 前缀变量注入，避免任何环境变量被 Vite 明文内联

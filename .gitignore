@@ -6,6 +6,8 @@ docs/讯飞接口配置.md
 .env.*.local
 *.keystore
 *.jks
+# 签名证书与口令（本机保存，绝不进仓库）
+.keys/
 
 # 构建期生成的分片配置：内含密钥派生片段，绝不进仓库
 english-listen-read/src/api/generated/
@@ -56,3 +58,9 @@ tools/pep/cdp-*.mjs
 .DS_Store
 Thumbs.db
 ~$*
+
+# 本机密钥笔记 / 开发日志 / 浏览器调试缓存（不进仓库）
+english-listen-read/key.md
+english-listen-read/dev-err.txt
+english-listen-read/dev-out.txt
+.playwright-mcp/

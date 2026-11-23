@@ -30,7 +30,7 @@ DOC = os.path.join(ROOT, "docs", "讯飞接口配置.md")
 MAAS_URL = "https://maas-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
 OCR_HOST = "cbm01.cn-huabei-1.xf-yun.com"
 OCR_PATH = "/v1/private/se75ocrbm"
-IAT_HOST, IAT_PATH = "iat.cn-huabei-1.xf-yun.com", "/v1"
+IAT_HOST, IAT_PATH = "iat-api.xfyun.cn", "/v2/iat"
 TTS_HOST, TTS_PATH = "cbm01.cn-huabei-1.xf-yun.com", "/v1/private/mcd9m97e6"
 
 
@@ -170,7 +170,7 @@ def main():
     probe_ocr(c, "api.xf-yun.com", img)
     probe_ocr(c, OCR_HOST, img)
     print("\n=== 3. WebSocket 握手（仅看 HTTP 状态行，不发音频）===")
-    probe_wss(c, IAT_HOST, IAT_PATH, "IAT 语音听写 V2.0")
+    probe_wss(c, IAT_HOST, IAT_PATH, "IAT 语音听写（经典流式版）V2.0")
     probe_wss(c, TTS_HOST, TTS_PATH, "TTS 超拟人合成")
     print("\n说明：101 Switching Protocols = 鉴权通过；401/403 = 签名或时钟问题；")
     print("      11200 = 该 APPID 下未添加此服务；10161/10222 = 已过鉴权、只是图片/参数问题。")

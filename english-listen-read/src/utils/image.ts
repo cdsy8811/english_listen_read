@@ -3,6 +3,7 @@
  * OCR 要求 base64 编码后 ≤ 4M；拍照图通常 3–10M，必须先压缩。
  */
 import { readDataUrl } from './plus-io.ts'
+import { kb, logger } from './log.ts'
 
 export interface ImagePayload { base64: string; encoding: 'jpg' | 'png' }
 
@@ -30,23 +31,37 @@ function compress(filePath: string, quality: number): Promise<string> {
 /** 拍照 / 相册选出的临时路径 → 满足 4M 限制的 base64。 */
 export async function prepareImage(filePath: string): Promise<ImagePayload> {
   const path = filePath
+  let lastKB = 0
   for (const q of [80, 60, 40]) {
     const compressed = await compress(path, q)
     const base64 = await readAsBase64(compressed)
-    if (base64.length <= MAX_B64) return { base64, encoding: 'jpg' }
+    lastKB = kb(base64.length)
+    logger.debug('image.compress', { quality: q, kb: lastKB, limitKB: kb(MAX_B64) })
+    if (base64.length <= MAX_B64) {
+      logger.debug('image.ready', { quality: q, kb: lastKB })
+      return { base64, encoding: 'jpg' }
+    }
   }
+  logger.warn('image.too.large', { kb: lastKB, limitKB: kb(MAX_B64) })
   throw new Error('图片过大（压缩后仍超过 4M），请裁剪后分次拍照')
 }
 
 /** 拍照或从相册选择，返回临时文件路径。 */
 export function chooseImage(source: 'camera' | 'album'): Promise<string> {
+  logger.debug('image.choose.req', { source })
   return new Promise((resolve, reject) => {
     uni.chooseImage({
       count: 1,
       sourceType: [source],
       sizeType: ['compressed'],
-      success: (r) => resolve(r.tempFilePaths[0]),
-      fail: () => reject(new Error('已取消选择图片')),
+      success: (r) => {
+        logger.debug('image.choose.ok', { source, files: r.tempFilePaths.length })
+        resolve(r.tempFilePaths[0])
+      },
+      fail: () => {
+        logger.warn('image.choose.cancel', { source })
+        reject(new Error('已取消选择图片'))
+      },
     })
   })
 }

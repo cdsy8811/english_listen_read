@@ -102,11 +102,11 @@ export function buildEnvLocal({ withCredentials = true, previous = {} } = {}) {
   // 发音人不是密钥；实测可用的默认值，联调时可在 .env.local 覆盖
   const pick = (k, fallback) => {
     const prev = previous[k]
-    if (prev && !/REPLACE_ME/.test(prev)) { values[k] = prev; return }
-    if (!values[k] || /REPLACE_ME/.test(values[k])) values[k] = fallback
+    if (prev && !/REPLACE_?ME/.test(prev)) { values[k] = prev; return }
+    if (!values[k] || /REPLACE_?ME/.test(values[k])) values[k] = fallback
   }
   pick('XFYUN_TTS_VCN_ZH', 'x5_lingxiaoxuan_flow')
-  pick('XFYUN_TTS_VCN_EN', 'x5_EnUs_Grant_flow')
+  pick('XFYUN_TTS_VCN_EN', 'x5_EnUs_Lila_flow')
   if (withCredentials) Object.assign(values, readCredentialsFromDoc())
   const lines = [
     '# 由 npm run prepare:env 自动生成；含真实凭据，已被 .gitignore 排除。',
@@ -163,7 +163,7 @@ const GENERATED_HEADER = `/* 自动生成，请勿编辑、请勿提交。本文
 
 /** 生成 credentials.ts 源码；不向任何日志输出密钥值。 */
 export function renderGenerated(env) {
-  const missing = SECRET_KEYS.filter((k) => !env[k] || /REPLACE_ME|^\s*$/.test(env[k]))
+  const missing = SECRET_KEYS.filter((k) => !env[k] || /REPLACE_?ME|^\s*$/.test(env[k]))
   const seed = 0x5f3a7c91
   const packs = {}
   for (const k of SECRET_KEYS) packs[k] = shard(env[k] || '', seed + k.length * 7919)
@@ -245,6 +245,12 @@ export function generateCredentials() {
     return { ok: false, reason: 'missing-.env.local' }
   }
   fs.mkdirSync(GENERATED_DIR, { recursive: true })
-  fs.writeFileSync(GENERATED_FILE, renderGenerated(env), 'utf8')
-  return { ok: true, source: 'generated', missing: SECRET_KEYS.filter((k) => !env[k] || /REPLACE_ME/.test(env[k])) }
+  const next = renderGenerated(env)
+  // 内容没变就不写盘：vite dev 的 buildStart 每轮都会调用这里，
+  // 无条件写文件会不断触发 watcher，造成「编译 → 重写 → 再编译」的死循环。
+  const prev = fs.existsSync(GENERATED_FILE) ? fs.readFileSync(GENERATED_FILE, 'utf8') : null
+  const missing = SECRET_KEYS.filter((k) => !env[k] || /REPLACE_?ME/.test(env[k]))
+  if (prev === next) return { ok: true, source: 'unchanged', missing }
+  fs.writeFileSync(GENERATED_FILE, next, 'utf8')
+  return { ok: true, source: 'generated', missing }
 }

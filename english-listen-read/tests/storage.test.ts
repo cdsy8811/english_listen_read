@@ -14,13 +14,25 @@ function freshDb() {
   return db
 }
 
-test('DDL 覆盖方案第 6 节的五张表', async () => {
+test('DDL 覆盖方案第 6 节的固定表（含词典、跟读与学习记录）', async () => {
   freshDb()
   await initDatabase()
   const joined = DDL.join('\n')
-  for (const t of ['unit', 'word', 'practice_record', 'settings', 'media_cache']) {
+  for (const t of [
+    'unit', 'word', 'practice_record', 'settings', 'media_cache',
+    'dict_cache', 'dict_history', 'gloss_cache', 'read_article', 'read_record', 'study_session',
+  ]) {
     assert.match(joined, new RegExp(`CREATE TABLE IF NOT EXISTS ${t}\\s*\\(`))
   }
+})
+
+test('H5 旧快照缺表：补齐空数组后仍能写跟读文章', async () => {
+  // 旧版本 localStorage 快照没有 read_article；不能因此让 INSERT 报 filter of undefined
+  setDbForTest(createMemoryDb(undefined, { unit: [], word: [] }))
+  await initDatabase()
+  const a = await repo.createArticle({ title: '旧快照', sentences: ['Hello world.'] })
+  assert.deepEqual(a.sentences, ['Hello world.'])
+  assert.equal((await repo.listArticles()).length, 1)
 })
 
 test('单元 / 词条增删改查 + 搜索', async () => {
@@ -103,13 +115,55 @@ test('导入导出：幂等覆盖，坏文件被拒绝', async () => {
   await assert.rejects(() => repo.importBundle({ version: 9 } as never), /格式不正确/)
 })
 
-test('音频缓存：命中 / 过期', async () => {
+test('清空词库：删单元 / 词条 / 练习记录，设置与音频缓存保留', async () => {
   freshDb()
   await initDatabase()
-  assert.equal(await repo.getCachedAudio('h1', 'en', 'vcn', 50), null)
-  await repo.putCachedAudio('h1', 'en', 'vcn', 50, '_doc/audio/a.mp3')
-  assert.equal(await repo.getCachedAudio('h1', 'en', 'vcn', 50), '_doc/audio/a.mp3')
-  assert.equal(await repo.getCachedAudio('h1', 'zh', 'vcn', 50), null)
+  const u = await repo.createUnit('Unit X')
+  const w = repo.draftToWord({ word: 'camera', phonetic: '', pos: 'n.', translation: '照相机' }, u.id, 0)
+  await repo.saveWords([w])
+  await repo.addRecord({
+    id: 'r1', word_id: w.id, mode: '2.2', input_type: 'record',
+    raw_text: '', asr_text: 'camera', score: 30, detail_json: '{}', created_at: Date.now(),
+  })
+  await repo.saveSetting('speed', 1.6)
+  await repo.putAudioCacheRow({
+    text_hash: 'h1', lang: 'en', vcn: 'vcn', speed: 50,
+    path: '_doc/audio/a.mp3', expired_at: 0, bytes: 1024, hits: 0, last_used_at: 1,
+  })
+
+  const res = await repo.clearLibrary()
+  assert.deepEqual(res, { units: 1, words: 1, records: 1 })
+  assert.equal((await repo.listUnits()).length, 0)
+  assert.equal((await repo.listWords(u.id)).length, 0)
+  assert.equal((await repo.listWrongWords()).length, 0)
+  // 设置与音频缓存不受影响
+  assert.equal((await repo.loadSettings()).speed, 1.6)
+  assert.equal((await repo.getAudioCacheRow('h1', 'en', 'vcn', 50))?.path, '_doc/audio/a.mp3')
+})
+
+test('音频缓存索引：读写 / 联合主键去重 / 按 path 删除 / 清空', async () => {
+  freshDb()
+  await initDatabase()
+  assert.equal(await repo.getAudioCacheRow('h1', 'en', 'vcn', 50), null)
+  const base: repo.AudioCacheRow = {
+    text_hash: 'h1', lang: 'en', vcn: 'vcn', speed: 50,
+    path: '_doc/audio/a.mp3', expired_at: 0, bytes: 2048, hits: 0, last_used_at: 1,
+  }
+  await repo.putAudioCacheRow(base)
+  const row = await repo.getAudioCacheRow('h1', 'en', 'vcn', 50)
+  assert.equal(row?.path, '_doc/audio/a.mp3')
+  assert.equal(row?.bytes, 2048)
+  // 语种不同即不同键
+  assert.equal(await repo.getAudioCacheRow('h1', 'zh', 'vcn', 50), null)
+  // 命中回写（同一联合主键）不会插出重复行
+  await repo.putAudioCacheRow({ ...base, hits: 1, last_used_at: 2 })
+  assert.deepEqual(await repo.audioCacheTotals(), { count: 1, bytes: 2048 })
+  // 按 path 删除（单条件 WHERE，两端实现都支持）
+  await repo.deleteAudioCacheRowByPath('_doc/audio/a.mp3')
+  assert.equal(await repo.getAudioCacheRow('h1', 'en', 'vcn', 50), null)
+  await repo.putAudioCacheRow({ ...base, bytes: 0 })
+  assert.equal(await repo.clearAudioCacheRows(), 1)
+  assert.deepEqual(await repo.audioCacheTotals(), { count: 0, bytes: 0 })
 })
 
 test('日志脱敏：URL 查询串 / Authorization / app_id / image base64 全部不落地', () => {
@@ -167,4 +221,23 @@ test('本地密钥链：.env.local 与分片文件都已生成', () => {
   assert.equal(r.ok, true)
   assert.ok(fs.existsSync(GENERATED_FILE))
   assert.ok(fs.existsSync(`${PROJECT_ROOT}/.env.local`))
+})
+
+test('学习记录：写入 / 按开始时间倒序读取 / 清空', async () => {
+  freshDb()
+  await initDatabase()
+  const base = {
+    kind: 'practice' as const, mode: 'dictation', unit_id: 'u1', title: '七上 Unit 1',
+    ended_at: 0, duration_sec: 60, total: 10, answered: 5, passed: 3, avg_score: 72, created_at: 0,
+  }
+  await repo.addStudySession({ ...base, id: 's1', started_at: 1000, ended_at: 1060, created_at: 1060 })
+  await repo.addStudySession({ ...base, id: 's2', kind: 'read', mode: 'read', title: '短文', started_at: 2000, ended_at: 2060, created_at: 2060 })
+  const list = await repo.listStudySessions(10)
+  assert.equal(list.length, 2)
+  assert.equal(list[0].id, 's2')
+  assert.equal(list[0].kind, 'read')
+  assert.equal(list[1].duration_sec, 60)
+  assert.equal(list[1].avg_score, 72)
+  await repo.clearStudySessions()
+  assert.equal((await repo.listStudySessions()).length, 0)
 })

@@ -2,7 +2,8 @@
  * 安卓原生 TTS 降级档（完全离线、免费）。
  * 方案第 5 节结论：plus.android.importClass('android.speech.tts.TextToSpeech')
  * + OnInitListener 可用；风险是中文语音包可能 LANG_MISSING_DATA。
- * 仅作为英文超拟人音色未授权 / 无网时的降级，不进主线。
+ * 主线已全部改用讯飞超拟人（中文 / 英文美音），本档只在三种情况使用：
+ * 无网 / 云调用失败 / 用户选 UK 英音（讯飞只授权了美式音色）。不进主线。
  */
 import { logger } from '../utils/log.ts'
 import type { SpeakOptions } from './xfyun-tts.ts'
@@ -45,7 +46,7 @@ function browserSpeak(text: string, opts: SpeakOptions): Promise<void> {
       resolve()
     }
     const utter = new SpeechSynthesisUtterance(text)
-    utter.lang = opts.lang === 'zh' ? 'zh-CN' : 'en-US'
+    utter.lang = opts.lang === 'zh' ? 'zh-CN' : (opts.accent === 'UK' ? 'en-GB' : 'en-US')
     utter.rate = Math.min(2, Math.max(0.5, opts.speed))
     utter.volume = Math.min(1, Math.max(0, opts.volume / 100))
     utter.onend = finish
@@ -92,9 +93,9 @@ export async function nativeSpeak(text: string, opts: SpeakOptions): Promise<voi
   // #ifdef APP-PLUS
   const tts = instance()
   if (!tts) return
-  const Locale = androidClass<{ CHINESE: unknown; US: unknown }>('java.util.Locale')
+  const Locale = androidClass<{ CHINESE: unknown; US: unknown; UK: unknown }>('java.util.Locale')
   const HashMap = androidClass<new () => { put: (k: string, v: string) => void }>('java.util.HashMap')
-  tts.setLanguage(opts.lang === 'zh' ? Locale.CHINESE : Locale.US)
+  tts.setLanguage(opts.lang === 'zh' ? Locale.CHINESE : (opts.accent === 'UK' ? Locale.UK : Locale.US))
   tts.setSpeechRate(Math.min(2, Math.max(0.5, opts.speed)))
   await new Promise<void>((resolve) => {
     let done = false

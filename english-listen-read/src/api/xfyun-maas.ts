@@ -10,7 +10,7 @@
  */
 import { httpJson } from './http.ts'
 import { ENDPOINTS, maasApiKey } from './runtime-config.ts'
-import { CloudError, logger } from '../utils/log.ts'
+import { CloudError, errText, logger } from '../utils/log.ts'
 import { withRetry } from '../utils/retry.ts'
 
 export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
@@ -44,7 +44,13 @@ export function buildChatBody(messages: ChatMessage[], opts: ChatOptions, model:
 export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
   const url = `${ENDPOINTS.maasBase.replace(/\/$/, '')}/chat/completions`
   const body = buildChatBody(messages, opts, ENDPOINTS.maasModel)
-  const run = async (): Promise<string> => {
+  const t0 = Date.now()
+  logger.debug('maas.req', {
+    model: ENDPOINTS.maasModel, messages: messages.length,
+    chars: messages.reduce((n, m) => n + m.content.length, 0),
+    timeout: opts.timeout ?? 90000, thinking: opts.thinking ?? 'default',
+  })
+  const run = async (attempt = 0): Promise<string> => {
     const res = await httpJson<ChatResponse>({
       url,
       method: 'POST',
@@ -54,9 +60,15 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
       retry: false, // 重试由本层统一控制，便于解析业务错误
       route: 'chat', // H5 开发预览走本机代理
     })
-    if (res.error) throw new CloudError(`模型服务返回错误：${res.error.message || '未知'}`, 0)
+    if (res.error) {
+      logger.warn('maas.api.error', { code: res.error.code, msg: res.error.message })
+      throw new CloudError(`模型服务返回错误：${res.error.message || '未知'}`, 0)
+    }
     const choice = res.choices?.[0]
     const content = choice?.message?.content
+    logger.debug('maas.res', {
+      attempt, finish: choice?.finish_reason, chars: content?.length ?? 0, ms: Date.now() - t0,
+    })
     if (!content) {
       // 区分「被思考截断」与「真空结果」，给出可操作提示而不是笼统失败
       if (choice?.finish_reason === 'length' && choice?.message?.reasoning_content) {
@@ -69,7 +81,7 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
   try {
     return await withRetry(run, { retries: 2 })
   } catch (e) {
-    logger.error('maas.error', { code: (e as CloudError).code })
+    logger.error('maas.error', { code: (e as CloudError).code, ms: Date.now() - t0, msg: errText(e) })
     throw e
   }
 }

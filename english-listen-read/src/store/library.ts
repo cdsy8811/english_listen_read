@@ -49,5 +49,12 @@ export const useLibraryStore = defineStore('library', {
       await repo.saveWord(w)
       await this.openUnit(this.currentUnitId)
     },
+    /** 清空词库后重置内存态（清库本身在 settings 页调 repo.clearLibrary） */
+    clearAll() {
+      this.units = []
+      this.words = []
+      this.currentUnitId = ''
+      this.keyword = ''
+    },
   },
 })
