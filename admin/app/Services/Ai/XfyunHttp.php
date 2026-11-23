@@ -43,7 +43,7 @@ class XfyunHttp
         ];
 
         $started = microtime(true);
-        $response = Http::timeout((int) config('xfyun.timeout'))->acceptJson()->post($url, $body);
+        $response = Http::retry(2, 500)->timeout((int) config('xfyun.timeout'))->acceptJson()->post($url, $body);
         $json = $response->json() ?? [];
         $header = $json['header'] ?? [];
         $code = $header['code'] ?? null;
@@ -117,7 +117,8 @@ class XfyunHttp
         }
 
         $started = microtime(true);
-        $response = Http::timeout((int) ($options['timeout'] ?? config('xfyun.timeout')))
+        $response = Http::retry(2, 500)
+            ->timeout((int) ($options['timeout'] ?? config('xfyun.timeout')))
             ->withToken((string) config('xfyun.maas.api_key'))
             ->acceptJson()
             ->post($url, $body);
