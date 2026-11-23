@@ -14,6 +14,7 @@ use App\Services\Ai\XfyunHttp;
 use App\Services\Ai\XfyunWebSocket;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 class AiController extends Controller
@@ -179,9 +180,16 @@ class AiController extends Controller
         $lang = $data['lang'] ?? 'en';
 
         return $this->run('asr', $request, strlen($binary), function () use ($binary, $lang) {
-            return $this->success([
-                'text' => $this->ws->asr($binary, $lang),
-            ]);
+            try {
+                $text = $this->ws->asr($binary, $lang);
+            } catch (RuntimeException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                logger()->warning('ai.asr.connection', ['class' => get_class($e)]);
+                throw new RuntimeException('听写连接失败，请稍后重试');
+            }
+
+            return $this->success(['text' => $text]);
         });
     }
 

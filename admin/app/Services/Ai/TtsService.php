@@ -47,7 +47,15 @@ class TtsService
             $asset->delete();
         }
 
-        $bytes = $this->ws->tts($text, $lang, $speed);
+        try {
+            $bytes = $this->ws->tts($text, $lang, $speed);
+        } catch (RuntimeException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            logger()->warning('ai.tts.connection', ['class' => get_class($e)]);
+            throw new RuntimeException('语音合成连接失败，请稍后重试');
+        }
+
         $disk->put($path, $bytes);
 
         TtsAsset::updateOrCreate(

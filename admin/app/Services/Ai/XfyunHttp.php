@@ -43,7 +43,12 @@ class XfyunHttp
         ];
 
         $started = microtime(true);
-        $response = Http::retry(2, 500)->timeout((int) config('xfyun.timeout'))->acceptJson()->post($url, $body);
+        try {
+            $response = Http::retry(2, 500)->timeout((int) config('xfyun.timeout'))->acceptJson()->post($url, $body);
+        } catch (\Throwable $e) {
+            logger()->warning('ai.ocr.http', ['class' => get_class($e)]);
+            throw new RuntimeException('识别服务请求失败，请稍后重试');
+        }
         $json = $response->json() ?? [];
         $header = $json['header'] ?? [];
         $code = $header['code'] ?? null;
@@ -117,11 +122,16 @@ class XfyunHttp
         }
 
         $started = microtime(true);
-        $response = Http::retry(2, 500)
-            ->timeout((int) ($options['timeout'] ?? config('xfyun.timeout')))
-            ->withToken((string) config('xfyun.maas.api_key'))
-            ->acceptJson()
-            ->post($url, $body);
+        try {
+            $response = Http::retry(2, 500)
+                ->timeout((int) ($options['timeout'] ?? config('xfyun.timeout')))
+                ->withToken((string) config('xfyun.maas.api_key'))
+                ->acceptJson()
+                ->post($url, $body);
+        } catch (\Throwable $e) {
+            logger()->warning('ai.chat.http', ['class' => get_class($e)]);
+            throw new RuntimeException('模型服务请求失败，请稍后重试');
+        }
 
         $json = $response->json() ?? [];
         $choice = $json['choices'][0] ?? null;
