@@ -1,0 +1,139 @@
+:root {
+    --brand: #f97316;
+    --brand-dark: #c2410c;
+    --brand-soft: #fff7ed;
+    --page-bg: #f5f7fb;
+    --panel-bg: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --el-color-primary: #f97316;
+    --el-color-primary-light-3: #fb923c;
+    --el-color-primary-light-5: #fdba74;
+    --el-color-primary-light-7: #fed7aa;
+    --el-color-primary-light-9: #fff7ed;
+    --el-color-primary-dark-2: #ea580c;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text-main);
+    background: var(--page-bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.page {
+    padding: 16px;
+}
+
+.page-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.page-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+
+.page-desc {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0 0 16px;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.toolbar-left,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.muted {
+    color: var(--text-muted);
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
+.el-button--primary {
+    --el-button-bg-color: var(--brand);
+    --el-button-border-color: var(--brand);
+    --el-button-hover-bg-color: #fb923c;
+    --el-button-hover-border-color: #fb923c;
+    --el-button-active-bg-color: var(--brand-dark);
+    --el-button-active-border-color: var(--brand-dark);
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+}
+
+.stat-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.stat-value small {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.chart-box {
+    width: 100%;
+    height: 320px;
+}
+
+@media (max-width: 768px) {
+    .page {
+        padding: 10px;
+    }
+}
