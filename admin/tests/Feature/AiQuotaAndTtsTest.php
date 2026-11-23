@@ -16,6 +16,7 @@ class AiQuotaAndTtsTest extends TestCase
     use RefreshDatabase;
 
     private AppUser $user;
+
     private array $headers;
 
     protected function setUp(): void

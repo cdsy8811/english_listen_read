@@ -3,11 +3,19 @@
     <h2 class="page-title">跟读</h2>
     <p class="page-desc">查看用户添加的英文短文、逐句中文与跟读记录。</p>
 
-    <BaseCrud ref="crudRef" :config="config">
-      <template #actions="{ row }">
-        <el-button link type="primary" @click="openDetail(row)">查看</el-button>
-      </template>
-    </BaseCrud>
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="短文" name="articles">
+        <BaseCrud v-if="activeTab === 'articles'" ref="crudRef" :config="config">
+          <template #actions="{ row }">
+            <el-button link type="primary" @click="openDetail(row)">查看</el-button>
+          </template>
+        </BaseCrud>
+      </el-tab-pane>
+
+      <el-tab-pane label="跟读记录" name="records">
+        <BaseCrud v-if="activeTab === 'records'" :config="recordConfig" />
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog v-model="detailVisible" :title="current?.title || '短文详情'" width="820px" destroy-on-close>
       <div v-if="current" class="article">
@@ -21,14 +29,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import BaseCrud from '@admin/components/BaseCrud/index.vue';
 import request from '@admin/utils/request';
 
+const activeTab = ref('articles');
 const crudRef = ref();
 const detailVisible = ref(false);
 const current = ref(null);
-const options = ref([]);
 
 const config = reactive({
   api: '/read/articles',
@@ -53,7 +61,21 @@ const config = reactive({
   ],
 });
 
-const detailCount = computed(() => current.value?.sentences?.length || 0);
+const recordConfig = reactive({
+  api: '/read/records',
+  selection: false,
+  search: [
+    { prop: 'app_user_id', label: '账号', type: 'select', width: '180px', options: [] },
+    { prop: 'created_at', label: '时间', type: 'date-range' },
+  ],
+  columns: [
+    { prop: 'article_title', label: '文章', minWidth: 200 },
+    { prop: 'sentence_index', label: '句序', width: 80, formatter: (row) => `第 ${row.sentence_index + 1} 句` },
+    { prop: 'score', label: '分数', width: 80 },
+    { prop: 'asr_text', label: '转写', minWidth: 240 },
+    { prop: 'created_at', label: '时间', minWidth: 150 },
+  ],
+});
 
 function openDetail(row) {
   current.value = row;
@@ -62,11 +84,12 @@ function openDetail(row) {
 
 async function loadOptions() {
   const res = await request.get('/options/app-users', { params: { page_size: 100 } });
-  options.value = (res.data || []).map((user) => ({
+  const options = (res.data || []).map((user) => ({
     label: `${user.nickname || user.username}（${user.username}）`,
     value: user.id,
   }));
-  config.search[0].options = options.value;
+  config.search[0].options = options;
+  recordConfig.search[0].options = options;
 }
 
 onMounted(loadOptions);

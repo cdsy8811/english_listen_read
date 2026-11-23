@@ -56,7 +56,7 @@ const config = {
   createTitle: '新增 App 用户',
   editTitle: '编辑 App 用户',
   dialogWidth: '600px',
-  actionWidth: 260,
+  actionWidth: 300,
   permissions: {
     add: 'app_user:add',
     edit: 'app_user:edit',
