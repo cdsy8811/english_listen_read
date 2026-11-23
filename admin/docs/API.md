@@ -172,6 +172,12 @@ Content-Type: multipart/form-data
 image=<jpg/png/webp>
 ```
 
+也支持 JSON：
+
+```json
+{"image_base64":"...","encoding":"jpg"}
+```
+
 ```json
 {"markdown": "..."}
 ```
@@ -242,6 +248,12 @@ Content-Type: multipart/form-data
 
 audio=<16k 单声道 mp3>
 lang=en
+```
+
+也支持 JSON：
+
+```json
+{"audio_base64":"...","lang":"en"}
 ```
 
 ```json

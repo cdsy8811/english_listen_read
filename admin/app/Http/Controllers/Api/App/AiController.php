@@ -13,6 +13,7 @@ use App\Services\Ai\TtsService;
 use App\Services\Ai\XfyunHttp;
 use App\Services\Ai\XfyunWebSocket;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class AiController extends Controller
@@ -30,16 +31,31 @@ class AiController extends Controller
     public function ocr(Request $request)
     {
         $data = $request->validate([
-            'image' => ['required', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp'],
+            'image' => ['nullable', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp'],
+            'image_base64' => ['nullable', 'string'],
+            'encoding' => ['nullable', 'in:jpg,jpeg,png,webp'],
         ]);
 
-        $file = $data['image'];
-        $binary = file_get_contents($file->getRealPath()) ?: '';
-        $encoding = match (strtolower($file->extension() ?: 'jpg')) {
-            'png' => 'png',
-            'webp' => 'webp',
-            default => 'jpg',
-        };
+        if ($request->hasFile('image')) {
+            $file = $data['image'];
+            $binary = file_get_contents($file->getRealPath()) ?: '';
+            $encoding = match (strtolower($file->extension() ?: 'jpg')) {
+                'png' => 'png',
+                'webp' => 'webp',
+                default => 'jpg',
+            };
+        } else {
+            $base64 = trim((string) ($data['image_base64'] ?? ''));
+            if ($base64 === '') {
+                throw ValidationException::withMessages(['image' => ['缺少图片：请上传 image 或传 image_base64']]);
+            }
+            $binary = base64_decode($base64, true);
+            if ($binary === false) {
+                throw new RuntimeException('image_base64 不是有效的 base64');
+            }
+            $encoding = (string) ($data['encoding'] ?? 'jpg');
+            $encoding = in_array($encoding, ['jpg', 'jpeg', 'png', 'webp'], true) ? $encoding : 'jpg';
+        }
 
         return $this->run('ocr', $request, strlen($binary), function () use ($binary, $encoding) {
             return $this->success([
@@ -142,12 +158,24 @@ class AiController extends Controller
     public function asr(Request $request)
     {
         $data = $request->validate([
-            'audio' => ['required', 'file', 'max:4096', 'mimes:mp3,mpeg,wav,ogg,m4a,mp4,webm'],
+            'audio' => ['nullable', 'file', 'max:4096', 'mimes:mp3,mpeg,wav,ogg,m4a,mp4,webm'],
+            'audio_base64' => ['nullable', 'string'],
             'lang' => ['nullable', 'in:zh,en'],
         ]);
 
-        $file = $data['audio'];
-        $binary = file_get_contents($file->getRealPath()) ?: '';
+        if ($request->hasFile('audio')) {
+            $binary = file_get_contents($data['audio']->getRealPath()) ?: '';
+        } else {
+            $base64 = trim((string) ($data['audio_base64'] ?? ''));
+            if ($base64 === '') {
+                throw ValidationException::withMessages(['audio' => ['缺少音频：请上传 audio 或传 audio_base64']]);
+            }
+            $binary = base64_decode($base64, true);
+            if ($binary === false) {
+                throw new RuntimeException('audio_base64 不是有效的 base64');
+            }
+        }
+
         $lang = $data['lang'] ?? 'en';
 
         return $this->run('asr', $request, strlen($binary), function () use ($binary, $lang) {
